@@ -1,0 +1,82 @@
+// Do Not Change Line Numbering ---------------------
+import meshgen
+import meshtools
+import optimize
+import vtk
+import functionals
+
+// Region Dimensions
+
+var dx = 0.15
+var Hreg = 8
+var Lreg = 12
+var Rp = 0.75
+var Np = 2
+
+// Import/Export Destination
+
+var pathexport = "/home/gabriel/Desktop/ProjectFiles/ColloidalMembranes/VTKMega/Round8"
+
+
+// --------------------------------------------------
+
+fn modulus(a, b){
+    return (a/b - floor(a/b))*b
+}
+
+fn CreateAndSaveMesh(Lregion, Hregion, Rpore, Npores, Grain, str){
+    if (Rpore > 0){
+         var hs0 = HalfSpaceDomain(Matrix([0,Hregion]), Matrix([0,1]))
+         var hs1 = hs0.difference(HalfSpaceDomain(Matrix([0,Hregion/2]), Matrix([0,-1])))
+         var hs2 = hs1.difference(HalfSpaceDomain(Matrix([0,-Hregion/2]), Matrix([0,1])))
+         var hs3 = hs2.difference(HalfSpaceDomain(Matrix([Lregion/2,0]), Matrix([-1,0])))
+         var rect = hs3.difference(HalfSpaceDomain(Matrix([-Lregion/2,0]), Matrix([1,0])))
+         if (Npores == 2){
+             var h = Hregion/2
+             var pore1 = CircularDomain(Matrix([0,h]), Rpore+0.001)
+             var pore2 = CircularDomain(Matrix([0,0]), Rpore+0.001)
+             rect = rect.difference(pore1).difference(pore2)
+         }
+         if (Npores == 3){
+             var h = Hregion/3
+             var pore1 = CircularDomain(Matrix([0,h]), Rpore+0.001)
+             var pore2 = CircularDomain(Matrix([0,0]), Rpore+0.001)
+             var pore3 = CircularDomain(Matrix([0,-h]), Rpore+0.001)
+             rect = rect.difference(pore1).difference(pore2).difference(pore3)
+         }
+         if (Npores == 4){
+             var h = Hregion/8
+             var pore1 = CircularDomain(Matrix([0,3*h]), Rpore+0.001)
+             var pore2 = CircularDomain(Matrix([0,h]), Rpore+0.001)
+             var pore3 = CircularDomain(Matrix([0,-h]), Rpore+0.001)
+             var pore4 = CircularDomain(Matrix([0,-3*h]), Rpore+0.001)
+             rect = rect.difference(pore1).difference(pore2).difference(pore3).difference(pore4)
+         }
+         var mg = MeshGen(rect, [-Lregion/2..Lregion/2:Grain, -Hregion/2..Hregion/2+0.01:Grain], quiet=false)
+         var meshe = mg.build()
+         var mesh = ChangeMeshDimension(meshe, 3)
+         mesh.addgrade(1)
+         mesh.addgrade(2)
+         var vtkME = VTKExporter(mesh)
+         vtkME.export(String(pathexport, str,".vtk"))
+         print(String("Multiple pore mesh created and exported as ",str,".vtk"))
+
+        return mesh
+    }
+    if (Rpore == 0 or Npores == 0) {
+        var hs0 = HalfSpaceDomain(Matrix([0,Hregion]), Matrix([0,1]))
+        var hs1 = hs0.difference(HalfSpaceDomain(Matrix([0,Hregion/2]), Matrix([0,-1])))
+        var hs2 = hs1.difference(HalfSpaceDomain(Matrix([0,-Hregion/2]), Matrix([0,1])))
+        var hs3 = hs2.difference(HalfSpaceDomain(Matrix([Lregion/2,0]), Matrix([-1,0])))
+        var rect = hs3.difference(HalfSpaceDomain(Matrix([-Lregion/2,0]), Matrix([1,0])))
+        var mg = MeshGen(rect, [-Lregion/2..Lregion/2:Grain, -Hregion/2..Hregion/2+0.01:Grain], quiet=true)
+        var meshe = mg.build()
+        var mesh = ChangeMeshDimension(meshe, 3)
+        mesh.addgrade(1)
+        mesh.addgrade(2)
+        var vtkME = VTKExporter(mesh)
+        vtkME.export(String(str,".vtk"))
+        return mesh
+    }
+}
+var mesh = CreateAndSaveMesh(Lreg, Hreg, Rp, Np, dx, String("DoublePoreInitialMesh"))

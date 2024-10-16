@@ -1,0 +1,364 @@
+import meshgen
+import meshtools
+import plot
+import optimize
+import vtk
+import functionals
+
+
+var pathexport = "/mnt/c/Users/gabey/OneDrive/Desktop/Fall 2023/SM Research/Multiple Pores/Example 1/"
+var pathenergies = "/mnt/c/Users/gabey/OneDrive/Desktop/Fall 2023/SM Research/Multiple Pores/Example 1/"
+
+
+fn modulus(a, b){
+    return (a/b - floor(a/b))*b
+}
+
+fn CreateAndSaveMesh(Lregion, Hregion, Rpore, Npores, Grain, str){
+    if (Rpore > 0){
+    //     var hs0 = HalfSpaceDomain(Matrix([0,Hregion]), Matrix([0,1]))
+    //     var hs1 = hs0.difference(HalfSpaceDomain(Matrix([0,Hregion/2]), Matrix([0,-1])))
+    //     var hs2 = hs1.difference(HalfSpaceDomain(Matrix([0,-Hregion/2]), Matrix([0,1])))
+    //     var hs3 = hs2.difference(HalfSpaceDomain(Matrix([Lregion/2,0]), Matrix([-1,0])))
+    //     var rect = hs3.difference(HalfSpaceDomain(Matrix([-Lregion/2,0]), Matrix([1,0])))
+    //     if (Npores == 2){
+    //         var h = Hregion/2
+    //         var pore1 = CircularDomain(Matrix([0,h]), Rpore+0.001)
+    //         var pore2 = CircularDomain(Matrix([0,0]), Rpore+0.001)
+    //         rect = rect.difference(pore1).difference(pore2)
+    //     }
+    //     if (Npores == 3){
+    //         var h = Hregion/3
+    //         var pore1 = CircularDomain(Matrix([0,h]), Rpore+0.001)
+    //         var pore2 = CircularDomain(Matrix([0,0]), Rpore+0.001)
+    //         var pore3 = CircularDomain(Matrix([0,-h]), Rpore+0.001)
+    //         rect = rect.difference(pore1).difference(pore2).difference(pore3)
+    //     }
+    //     if (Npores == 4){
+    //         var h = Hregion/8
+    //         var pore1 = CircularDomain(Matrix([0,3*h]), Rpore+0.001)
+    //         var pore2 = CircularDomain(Matrix([0,h]), Rpore+0.001)
+    //         var pore3 = CircularDomain(Matrix([0,-h]), Rpore+0.001)
+    //         var pore4 = CircularDomain(Matrix([0,-3*h]), Rpore+0.001)
+    //         rect = rect.difference(pore1).difference(pore2).difference(pore3).difference(pore4)
+    //     }
+    //     var mg = MeshGen(rect, [-Lregion/2..Lregion/2:Grain, -Hregion/2..Hregion/2+0.01:Grain], quiet=false)
+    //     var meshe = mg.build()
+    //     var mesh = ChangeMeshDimension(meshe, 3)
+    //     mesh.addgrade(1)
+    //     mesh.addgrade(2)
+    //     var vtkME = VTKExporter(mesh)
+    //     vtkME.export(String(pathexport, str,".vtk"))
+    //     print(String("Multiple pore mesh created and exported as ",str,".vtk"))
+
+        var vtkMI = VTKImporter(String(pathexport, str,".vtk"))
+        var mesh = vtkMI.mesh()
+        return mesh
+    }
+    if (Rpore == 0 or Npores == 0) {
+        var hs0 = HalfSpaceDomain(Matrix([0,Hregion]), Matrix([0,1]))
+        var hs1 = hs0.difference(HalfSpaceDomain(Matrix([0,Hregion/2]), Matrix([0,-1])))
+        var hs2 = hs1.difference(HalfSpaceDomain(Matrix([0,-Hregion/2]), Matrix([0,1])))
+        var hs3 = hs2.difference(HalfSpaceDomain(Matrix([Lregion/2,0]), Matrix([-1,0])))
+        var rect = hs3.difference(HalfSpaceDomain(Matrix([-Lregion/2,0]), Matrix([1,0])))
+        var mg = MeshGen(rect, [-Lregion/2..Lregion/2:Grain, -Hregion/2..Hregion/2+0.01:Grain], quiet=true)
+        var meshe = mg.build()
+        var mesh = ChangeMeshDimension(meshe, 3)
+        mesh.addgrade(1)
+        mesh.addgrade(2)
+        var vtkME = VTKExporter(mesh)
+        vtkME.export(String(str,".vtk"))
+        return mesh
+    }
+}
+
+fn CreateSelections(mesh, Lregion, Hregion, Rpore, Grain) {
+    var dx = Grain
+    var LeftWallReg = Selection(mesh, fn(x,y,z) x <= -Lregion/2 + dx)
+    var RightWallReg = Selection(mesh, fn(x,y,z) x >= Lregion/2 - dx)
+    var LowerWallReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + dx)
+    var UpperWallReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - dx)
+    var bnds = Selection(mesh, boundary=true)
+    bnds.addgrade(0)
+    LeftWallReg.addgrade(0)
+    RightWallReg.addgrade(0)
+    LowerWallReg.addgrade(0)
+    UpperWallReg.addgrade(0)
+    var inner = Selection(mesh, fn(x,y,z) abs(x)<Lregion/2-dx and abs(y)<Hregion/2-dx)
+    var lefthalf = Selection(mesh, fn(x,y,z) x<0)
+    var righthalf = Selection(mesh, fn(x,y,z) x>0)
+    var porebnd = bnds.intersection(inner)
+    var porebndleft = porebnd.intersection(lefthalf)
+    var porebndright = porebnd.intersection(righthalf)
+    var LeftWall = bnds.intersection(LeftWallReg)
+    var RightWall = bnds.intersection(RightWallReg)
+    var LowerWall = bnds.intersection(LowerWallReg)
+    var UpperWall = bnds.intersection(UpperWallReg)
+    // Show(plotselection(mesh, RightWall, grade=[0,1]))
+    var notporebnd = Selection(mesh, fn(x,y,z) sqrt(x^2 + y^2) > Rpore+0.5*dx)
+    porebnd.addgrade(1)
+    bnds.addgrade(1)
+    LeftWall.addgrade(1)
+    RightWall.addgrade(1)
+    UpperWall.addgrade(1)
+    LowerWall.addgrade(1)
+    print("Selections Created: \n bnds -> all boundarys \n porebnd -> pore boundary \n notporebnd -> region excluded from the pore boundary \n LeftWall -> left side boundary \n RightWall -> right side boundary \n UpperWall -> uppermost boundary \n LowerWall -> lowermost boundary")
+    return [LeftWall, RightWall, UpperWall, LowerWall, bnds, porebnd, notporebnd, porebndleft, porebndright]
+}
+
+fn EnergiesToFile(path, str, sopt, fopt) {
+    var sonum = Matrix(sopt.energy).dimensions()[0]-1
+    var fonum = Matrix(fopt.energy).dimensions()[0]-1
+    var fs = File("${path}${str}sopt.txt", "w")
+    for (i in 0..sonum) fs.write("${sopt.energy[i]}")
+    var ff = File("${path}${str}fopt.txt", "w")
+    for (i in 0..fonum) ff.write("${fopt.energy[i]}")
+    fs.close()
+    ff.close()
+}
+
+fn ListToFile(str, list){
+    var f = File("${pathexport}${str}.txt", "w")
+    for (dat in list) f.write(dat)
+    f.close()
+}
+
+
+ // //Initialize a field
+fn AddNematicFieldEnergy(mesh, problem, Lregion, Hregion, Ksplay, Ktwist, Kbend, q, C) {
+    var K = Ktwist
+    var nn = Field(mesh, fn(x,y,z) Matrix([0,sin(Pi/2 + Pi/2*arctan(x*sqrt(C/K))/arctan(Lregion/2*sqrt(C/K))),cos(Pi/2 + Pi/2*arctan(x*sqrt(C/K))/arctan(Lregion/2*sqrt(C/K)))])) 
+    var nem = Nematic(nn, ksplay = Ksplay, ktwist = Ktwist, kbend = Kbend, pitch = q)
+    problem.addenergy(nem)
+    return [nn, nem]
+}
+
+// For restricting the X-component locally
+class XCompSquared {
+    init(vec) {
+        self.vec = vec
+    }
+    integrand(vec) {
+        var int = vec.op(fn (x) x[0]^2)
+        return int.linearize().transpose()
+    }
+
+    fieldgradient(vec, mesh) {
+        // print vec
+        var fg = vec.op(fn (x) Matrix([2*x[0], 0, 0]))
+        return fg
+    }
+
+    total(vec) {
+        return self.integrand(vec).sum()
+    }
+
+}
+
+// Add a tilt energy functional C/2*sin^2(theta)
+fn tIntegrand(x, n) {                   
+    return (1-(n[2])^2)
+}
+
+
+fn AddTiltEnergy(problem, nn, C) {
+    var tilt = AreaIntegral(tIntegrand, nn) 
+    problem.addenergy(tilt, prefactor = C/2)
+}
+
+// Add a line tension functional
+fn lIntegrand(x){
+    return (1)
+}
+fn AddEdgeEnergy(problem, sel, g) {
+    var lten = LineIntegral(lIntegrand)
+    problem.addenergy(lten, selection=sel, prefactor = g)
+}
+
+fn AddPressure(problem, f) {
+    problem.addenergy(Area(), prefactor=(-f))
+}
+
+
+
+fn AddConstraints(problem, reg,  UpperWall, LowerWall, LeftWall, RightWall, nn) {
+    // Add a level set to keep things in the z axis
+    var lcons = ScalarPotential(fn (x,y,z) z)    
+    problem.addlocalconstraint(lcons)
+    reg.addlocalconstraint(lcons)   
+    // Add half space constraints to keep the pore from turning inside out (not working yet)
+    // problem.addlocalconstraint(hplus, onesided=true)
+    // problem.addlocalconstraint(hminus, onesided=true)
+    // problem.addlocalconstraint(vplus, onesided=true)
+    // problem.addlocalconstraint(vminus, onesided=true)
+
+
+    // // Fully restrict nx
+    // var lxcs=XCompSquared(nn)
+    // problem.addlocalconstraint(lxcs, field=nn, target=0)
+
+
+    // Add a functional to penalize nx
+    // var xcon = LineIntegral(fn (x, n) n[0]^2, nn)
+    // problem.addenergy(xcon, selection = UpperWall, prefactor = 100)
+    // problem.addenergy(xcon, selection = LowerWall, prefactor = 100)
+
+    // Unit vector constraint 
+    var lnorm = NormSq(nn)                      
+    problem.addlocalconstraint(lnorm, field=nn, target=1) 
+}
+
+fn CreateOptimizers(problem, reg,  mesh, LeftWall, RightWall, UpperWall, LowerWall, porebnd, nn) {
+
+    // Create the field optimizer
+    var fopt = FieldOptimizer(problem, nn)
+    fopt.stepsize = 0.01
+    fopt.fix(RightWall)
+    fopt.fix(LeftWall)
+    fopt.fix(UpperWall)
+    fopt.fix(LowerWall)
+    fopt.quiet = true
+    fopt.etol = 1e-6
+    var sopt = ShapeOptimizer(problem, mesh)   
+
+    sopt.quiet = true
+    sopt.stepsize = 0.001
+    sopt.steplimit = 0.01
+    sopt.etol = 1e-7
+    sopt.fix(RightWall)
+    sopt.fix(LeftWall)
+    sopt.fix(UpperWall)
+    sopt.fix(LowerWall)
+    
+    var leq = EquiElement()                     // Try to equalize elements
+    reg.addenergy(leq, prefactor = 1)         
+
+    var ropt = ShapeOptimizer(reg, mesh)
+    ropt.stepsize = 0.001
+    ropt.steplimit = 0.005
+    ropt.fix(porebnd)
+    ropt.fix(RightWall)
+    ropt.fix(LeftWall)
+    ropt.fix(UpperWall)
+    ropt.fix(LowerWall)
+    ropt.quiet=true
+
+    return [fopt, sopt, ropt, reg]
+}
+
+fn Optimization(str, mesh, nn, porebnd, ropt, fopt, sopt) {
+    print(String("Optimizing mesh and exporting with batch name ", str))
+    var iterations = 500
+    var vtkE = VTKExporter(nn)
+    var h = 0
+    vtkE.export("${pathexport}${str}_${h}.vtk")
+    var Break = false
+    for (i in 0..iterations) {
+        if (i < 200){
+            try{
+            fopt.conjugategradient(3)
+            sopt.conjugategradient(3)
+            } catch{"MtrxSnglr": Break = true}
+            if (Break) break
+            if (Int(modulus(i, 3))==0) {
+                ropt.conjugategradient(3)
+                if (i < 100) {
+                    equiangulate(mesh, quiet=true)
+                    ropt.conjugategradient(3)
+                }
+            }
+            h=h+1
+            if (Int(modulus(i, 5))==0) {
+                vtkE.export("${pathexport}${str}_${h}.vtk")
+                print("${i}/${iterations}")
+            }
+        }        
+        else {
+            try{
+            fopt.linesearch(5)
+            sopt.linesearch(5)
+            } catch{"MtrxSnglr": Break = true}
+            if (Break) break
+            if (sopt.hasconverged() && fopt.hasconverged()) {
+                break
+            }
+            h=h+1
+            if (Int(modulus(i, 5))==0) {
+                vtkE.export("${pathexport}${str}_${h}.vtk")
+                print("${i}/${iterations}")
+            }
+        }
+        var sonum = Matrix(sopt.energy).dimensions()[0]-1
+        var fonum = Matrix(fopt.energy).dimensions()[0]-1
+
+        if(abs(sopt.energy[sonum]) > abs(sopt.energy[0]*100) or abs(fopt.energy[fonum]) > abs(fopt.energy[0]*100)) {
+            print("Mesh Degradation")
+            break
+        }
+        print("sopt step: ${sopt.energy[sonum]-sopt.energy[sonum-1]}, fopt step: ${fopt.energy[fonum]-fopt.energy[fonum-1]}")
+    }
+}
+
+
+fn Refinement(str, mesh, nn, porebnd, LeftWall, RightWall, UpperWall, LowerWall, problem, reg, sopt, fopt, ropt, Nlevels) {
+    var vtkE = VTKExporter(nn)
+    /* Refinement */
+    for (level in 1..Nlevels) {
+        var mr = MeshRefiner([mesh, nn, porebnd, LeftWall, RightWall, UpperWall, LowerWall])
+        var refmap = mr.refine()
+
+        // Now refinement is done update the problems and optimizers
+        for (el in [problem, reg, sopt, fopt, ropt]) el.update(refmap)
+
+        // Update our references 
+        mesh = refmap[mesh]   // There are tidier ways to do this!
+        nn = refmap[nn]
+        porebnd = refmap[porebnd]
+        LeftWall = refmap[LeftWall]
+        RightWall = refmap[RightWall]
+        UpperWall = refmap[UpperWall]
+        LowerWall = refmap[LowerWall]
+        // Continue optimizing. We don't need further regularization for this particular problem
+        for (i in 1..5) {                  
+            sopt.conjugategradient(10)
+            fopt.conjugategradient(10)
+            if (sopt.hasconverged() && fopt.hasconverged()) break 
+        }
+        vtkE.export(String(str, "Refined",level,".vtk"))
+    }
+}
+
+// Perform simulations across multiple qs and line tensions
+
+var K = 1
+// var Ksplay = 1
+// var Kbend = 1
+// var Ktwist = 1
+var C = 0.9
+var q = 0.25
+var Rp = 0.75
+var gam = 0.55
+var dx = 0.2
+var Hreg = 12
+var Lreg = 12
+var ff = 0.2
+var Np = 4
+
+var mesh = CreateAndSaveMesh(Lreg, Hreg, Rp, Np, dx, String("4PoreMeshInitial"))
+
+            var Selections = CreateSelections(mesh, Lreg, Hreg, Rp, dx)
+            var LeftWall = Selections[0], RightWall = Selections[1], UpperWall = Selections[2], LowerWall = Selections[3], bnds = Selections[4], porebnd = Selections[5]
+            var problem = OptimizationProblem(mesh)
+            var reg = OptimizationProblem(mesh) 
+            var fe = AddNematicFieldEnergy(mesh, problem, Lreg, Hreg, K, K, K, q, C)
+            var nn = fe[0], nem = fe[1]
+            AddTiltEnergy(problem, nn, C)
+            AddEdgeEnergy(problem, porebnd, gam)
+            AddPressure(problem, ff)
+            AddConstraints(problem, reg, UpperWall, LowerWall, LeftWall, RightWall, nn)
+            var Optimizers = CreateOptimizers(problem, reg, mesh, LeftWall, RightWall, UpperWall, LowerWall, porebnd, nn)
+            var fopt = Optimizers[0], sopt = Optimizers[1], ropt = Optimizers[2]
+            var str = "FourPoresg${gam}f${ff}q${q}C${C}"
+            Optimization(str, mesh, nn, porebnd, ropt, fopt, sopt)
+            Show(plotmesh(mesh, grade = [0,1,2]))
+            EnergiesToFile(pathenergies, "Energies4Itg${gam}f${ff}q${q}C${C}", sopt, fopt)

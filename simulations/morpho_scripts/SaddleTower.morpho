@@ -1,0 +1,167 @@
+import meshgen
+import meshtools
+import plot
+import optimize
+import vtk
+import functionals
+
+// commenting out 
+var m = AreaMesh(fn (u, v) [v+random()*0.09, 2*cos(u)+random()*0.1, 2*sin(u)+random()*0.1], -Pi...Pi:Pi/16, -2..2:0.1, closed=[true, false])
+
+
+
+m.addgrade(1)
+var bnds = Selection(m, boundary=true)
+
+var bndsfront = Selection(m, fn (x,y,z) x > 0).intersection(bnds)
+bndsfront.addgrade(1)
+var bndsback = Selection(m, fn (x,y,z) x < 0).intersection(bnds)
+bndsback.addgrade(1)
+
+var functional = ScalarPotential(fn (x,y,z) (y^2 + z^2 - 4)^2)
+var levelf = ScalarPotential(fn (x,y,z) (x-2)^2)
+var levelb = ScalarPotential(fn (x,y,z) (x+2)^2)
+
+var reg = OptimizationProblem(m)
+reg.addenergy(functional, prefactor = 5)
+reg.addenergy(levelf, selection =bndsfront , prefactor = 5)
+reg.addenergy(levelb, selection = bndsback, prefactor = 5)
+var leq = EquiElement()
+
+reg.addenergy(leq, prefactor = 1) 
+var ropt = ShapeOptimizer(reg, m)
+
+
+for (i in 0...100){
+    ropt.conjugategradient(10)    
+    equiangulate(m)
+}
+
+Show(plotmesh(m, grade=[0,1,2]))
+
+
+
+var rightwallf = Selection(m, fn (x,y,z) y >= sin(Pi/4)).intersection(bndsfront)
+rightwallf.addgrade(1)
+var leftwallf = Selection(m, fn (x,y,z) y <= -sin(Pi/4)).intersection(bndsfront)
+leftwallf.addgrade(1)
+var topparabf = Selection(m, fn (x,y,z) z >= sin(Pi/4)).intersection(bndsfront)
+topparabf.addgrade(1)
+var bottomparabf = Selection(m, fn (x,y,z) z <= -sin(Pi/4)).intersection(bndsfront)
+bottomparabf.addgrade(1)
+var rightwallb = Selection(m, fn (x,y,z) y >= sin(Pi/4)).intersection(bndsback)
+rightwallb.addgrade(1)
+var leftwallb = Selection(m, fn (x,y,z) y <= -sin(Pi/4)).intersection(bndsback)
+leftwallb.addgrade(1)
+var topparabb = Selection(m, fn (x,y,z) z >= sin(Pi/4)).intersection(bndsback)
+topparabb.addgrade(1)
+var bottomparabb = Selection(m, fn (x,y,z) z <= -sin(Pi/4)).intersection(bndsback)
+bottomparabb.addgrade(1)
+
+var problem = OptimizationProblem(m)
+
+fn addfrontparabolaconst(mesh, problem, sel) {
+    var x0 = 2
+    var functional = ScalarPotential(fn (x,y,z) y^2 - (x-x0), fn (x,y,z) Matrix([-1 ,2*y,0]))
+    var cons = Constraint(functional, 0)
+    cons.selection = sel
+    cons.prefactor = 1
+    problem.constraints.append(cons)
+}
+fn addbackparabolaconst(mesh, problem, sel) {
+    var x0 = -2
+    var functional = ScalarPotential(fn (x,y,z) y^2 + (x-x0), fn (x,y,z) Matrix([1 ,2*y,0]))
+    var cons = Constraint(functional, 0)
+    cons.selection = sel
+    cons.prefactor = 1
+    problem.constraints.append(cons)
+}
+
+fn addxlevelsetconst(mesh, problem, sel, x0) {
+    var functional = ScalarPotential(fn (x,y,z) x)
+    problem.addlocalconstraint(functional, selection = sel, target = x0)
+//    var cons = Constraint(functional, x0)
+//    cons.selection = sel
+//    cons.prefactor = 1
+//    problem.constraints.append(cons)
+}
+
+fn addylevelsetconst(mesh, problem, sel, y0) {
+    var functional = ScalarPotential(fn (x,y,z) y)
+    problem.addlocalconstraint(functional, selection = sel,target = y0)
+//    var cons = Constraint(functional, y0)
+//    cons.selection = sel
+//    cons.prefactor = 1
+//    problem.constraints.append(cons)
+}
+
+fn addzlevelsetconst(mesh, problem, sel, z0) {
+    var functional = ScalarPotential(fn (x,y,z) z)
+    problem.addlocalconstraint(functional, selection = sel,target = z0)
+//    var cons = Constraint(functional, z0)
+//    cons.selection = sel
+//    cons.prefactor = 1
+//    problem.constraints.append(cons)
+}
+
+//Show(plotselection(m, rightwallf, grade = [0,1,2]))
+//Show(plotselection(m, leftwallf, grade = [0,1,2]))
+//Show(plotselection(m, topparabf, grade = [0,1,2]))
+//Show(plotselection(m, bottomparabf, grade = [0,1,2]))
+
+//addfrontparabolaconst(m, problem, topparabf)
+//addfrontparabolaconst(m, problem, bottomparabf)
+//addbackparabolaconst(m, problem, topparabb)
+//addbackparabolaconst(m, problem, bottomparabb)
+
+//addxlevelsetconst(m, problem, bndsfront, 2)
+//addxlevelsetconst(m, problem, bndsback, -2)
+
+//addylevelsetconst(m, problem, rightwallf, (sin(Pi/4)))
+//addylevelsetconst(m, problem, rightwallb, (sin(Pi/4)))
+//addylevelsetconst(m, problem, leftwallf, -(sin(Pi/4)))
+//addylevelsetconst(m, problem, leftwallb, -(sin(Pi/4)))
+
+//addzlevelsetconst(m, problem, topparabf, (sin(Pi/4)))
+//addzlevelsetconst(m, problem, bottomparabf, -(sin(Pi/4)))
+//addzlevelsetconst(m, problem, topparabb, (sin(Pi/4)))
+//addzlevelsetconst(m, problem, bottomparabb, -(sin(Pi/4)))
+
+var Ar = Area()
+problem.addenergy(Ar, prefactor = 1)
+//var Ln = Length()
+//problem.addenergy(Ln, selection=bnds)
+
+problem.addenergy(leq, prefactor = 2) 
+var sopt = ShapeOptimizer(problem,  m)   
+sopt.quiet = false
+sopt.stepsize = 0.0002
+sopt.steplimit = 0.002
+sopt.etol = 1e-8
+sopt.fix(bnds)
+for (i in 0...30){
+    sopt.conjugategradient(200)
+    equiangulate(m, fix=bnds)
+}
+
+Show(plotmesh(m, grade=[0,1,2]))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

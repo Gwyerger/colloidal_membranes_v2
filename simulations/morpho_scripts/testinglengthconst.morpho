@@ -1,0 +1,66 @@
+import meshgen
+import meshtools
+import plot
+import optimize
+import vtk
+import functionals
+
+var m = LineMesh(fn (t) [cos(t),sin(t), 0], -Pi...Pi:2*Pi/10, closed=true)
+
+var sel = Selection(m, fn(x,y,z) abs(x) < 10)
+sel.addgrade(1)
+
+Show(plotselection(m, sel, grade = [0,1]))
+
+var Ln = Length()
+var lcons = ScalarPotential(fn (x,y,z) z)    
+
+var problem = OptimizationProblem(m)
+
+// Keep the mesh in the plane
+problem.addlocalconstraint(lcons)
+
+var rodlength = 2*Pi/2
+// Make a constraint that enforces a minimum circumference of Pi
+
+fn SoftRepulsion(r, onerodlength) {
+    if (r < onerodlength){
+    return 1/r
+    }
+    else return 0 
+}
+
+fn SoftRepulsionGrad(r, onerodlength) {
+    if (r < onerodlength){
+    return -1/r^2
+    }
+    else return 0 
+}
+
+var pw = PairwisePotential(fn (r) SoftRepulsion(r, rodlength), fn (r) SoftRepulsionGrad(r, rodlength), cutoff=0.1*rodlength)    
+
+problem.addenergy(pw, selection = sel, prefactor=10)
+
+// Make the loop shrink 
+problem.addenergy(Ln, selection = sel, prefactor = 1)
+
+
+
+print(Ln.total(m))
+print(Ln.total(m, sel))
+print(pw.total(m))
+print(pw.total(m, sel))
+
+var sopt = ShapeOptimizer(problem, m)
+sopt.quiet = false
+sopt.stepsize = 0.001
+sopt.steplimit = 0.1
+sopt.etol = 5e-6
+
+print(Length().total(m))
+
+sopt.conjugategradient(5)
+
+
+
+

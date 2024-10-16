@@ -1,0 +1,50 @@
+// Test the MeshAdapter on a simple loop with inequality constraints
+import meshgen
+import meshtools
+import plot
+import optimize4
+import vtk
+import functionals
+
+// Build mesh 
+var m = LineMesh(fn (t) [cos(t),sin(t), 0], -Pi...Pi:Pi/24, closed=true)
+// Set up a demo problem 
+var problem = OptimizationProblem(m)
+
+problem.addenergy(Length())
+problem.addenergy(EquiElement())
+//
+//var horizontalwall = ScalarPotential(fn (x,y,z) y)
+//var verticalwall = ScalarPotential(fn (x,y,z) x)
+
+//problem.addlocalconstraint(horizontalwall, selection = sel, target = 1)
+//var sel = Selection(m, fn (x,y,z) abs(x)<0.5 and y<0)
+//sel.addgrade(1)
+//problem.addlocalconstraint(horizontalwall, selection = sel, target = -1)
+//var sel = Selection(m, fn (x,y,z) abs(y)<0.5 and x>0)
+//sel.addgrade(1)
+//problem.addlocalconstraint(verticalwall, selection = sel, target = 1)
+//var sel = Selection(m, fn (x,y,z) abs(y)<0.5 and x<0)
+//sel.addgrade(1)
+//problem.addlocalconstraint(verticalwall, selection = sel, target = -1)
+
+fn addlengthminimum(problem, target, selection=nil, field=nil){    
+    var functional = Length()
+    var cons = Constraint(functional, target)
+    cons.selection = selection
+    cons.field = field
+    cons.prefactor = 1
+    cons.onesided = true
+    problem.constraints.append(cons)
+}
+
+addlengthminimum(problem, Pi)
+
+var adapt = ProblemAdapter(problem, m) 
+
+var control = PenaltyController(adapt, verbosity="normal")
+control.optimize(100) 
+
+print(Length().total(m))
+
+Show(plotmesh(m, grade=[0,1]))
