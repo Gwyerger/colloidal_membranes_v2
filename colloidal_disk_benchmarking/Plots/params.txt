@@ -1,0 +1,8 @@
+Rs = 5:
+theta naught = theta max - 0.05
+Rs = 4:
+theta naught = theta max - 0.05
+Rs = 3:
+theta naught = theta max - 0.025
+Rs = 2:
+theta naught = theta max - 0.02

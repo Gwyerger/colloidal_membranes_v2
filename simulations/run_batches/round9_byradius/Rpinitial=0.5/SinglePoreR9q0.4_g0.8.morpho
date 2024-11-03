@@ -1,0 +1,476 @@
+// Do Not Change Line Numbering ---------------------
+import meshgen
+import meshtools
+import plot
+import optimize
+import optimize4
+import vtk
+import functionals
+
+// Theoretical Parameters
+
+// var Ksplay = 1
+// var Kbend = 1
+// var Ktwist = 1
+var K = 1
+var C = 2
+var lamt = sqrt(K/C)
+var qstar = 0.4 
+var gstar = 0.8 
+var pstar = 0.05
+
+// Region Dimensions
+var dx = 0.15/lamt
+var Hreg = 4/lamt
+var Lreg = 12/lamt
+var Rp = 0.5/lamt 
+var onerodlength = 0.5/lamt
+
+// Import/Export Destination
+
+var pathexport = "/home/repos/colloidal_membranes_v2/vtk_results/Round9_byradius/Rpinitial=0.5/q=0.4 g=0.8"
+var initialmeshpath = "/home/repos/colloidal_membranes_v2/vtk_results/Round9_byradius"
+
+// --------------------------------------------------
+
+
+fn modulus(a, b){
+    return (a/b - floor(a/b))*b
+}
+
+fn CreateSelections(mesh, Lregion, Hregion, Rpore, Grain) {
+    var LeftWallReg = Selection(mesh, fn(x,y,z) x <= -Lregion/2 + Grain)
+    var RightWallReg = Selection(mesh, fn(x,y,z) x >= Lregion/2 - Grain)
+    var LowerWallReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + Grain)
+    var UpperWallReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - Grain)
+
+    var LowerWallCentReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + 2*Grain and abs(x) < Lregion/8)
+    var UpperWallCentReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - 2*Grain and abs(x) < Lregion/8)
+    var bnds = Selection(mesh, boundary=true)
+    bnds.addgrade(0)
+    LeftWallReg.addgrade(0)
+    RightWallReg.addgrade(0)
+    LowerWallReg.addgrade(0)
+    UpperWallReg.addgrade(0)
+    var inner = Selection(mesh, fn(x,y,z) abs(x)<Lregion/2-Grain and abs(y)<Hregion/2-Grain)
+    var innertop = Selection(mesh, fn(x,y,z) abs(x)<Lregion/2-Grain and abs(y)<Hregion/2-Grain and y>3*Rpore/4)
+    var innerbottom = Selection(mesh, fn(x,y,z) abs(x)<Lregion/2-Grain and abs(y)<Hregion/2-Grain and y<-3*Rpore/4)
+
+    var lefthalf = Selection(mesh, fn(x,y,z) x<0)
+    var righthalf = Selection(mesh, fn(x,y,z) x>0)
+
+    var porebnd = bnds.intersection(inner)
+    var porebndtop = bnds.intersection(innertop)
+    var porebndbottom = bnds.intersection(innerbottom)
+
+    var LeftWall = bnds.intersection(LeftWallReg)
+    var RightWall = bnds.intersection(RightWallReg)
+    var LowerWallCent = bnds.intersection(LowerWallCentReg)
+    var UpperWallCent = bnds.intersection(UpperWallCentReg)
+    var LowerWall = bnds.intersection(LowerWallReg)
+    var UpperWall = bnds.intersection(UpperWallReg)
+//    LowerWall = LowerWall.difference(LeftWall).difference(RightWall)
+//    LeftWall = LeftWall.difference(UpperWall)
+//    RightWall = RightWall.difference(UpperWall)
+    
+//    Show(plotselection(mesh, LeftWall, grade = [0,1]))
+//    Show(plotselection(mesh, RightWall, grade = [0,1]))
+//    Show(plotselection(mesh, UpperWall, grade = [0,1]))
+//    Show(plotselection(mesh, LowerWall, grade = [0,1]))
+    porebnd.addgrade(1)
+    bnds.addgrade(1) 
+  
+    LeftWall.addgrade(1)
+    RightWall.addgrade(1)
+    UpperWall.addgrade(1)
+    LowerWall.addgrade(1)
+    
+    return [LeftWall, RightWall, UpperWall, LowerWall, bnds, porebnd, porebndtop, porebndbottom, LowerWallCent, UpperWallCent]
+}
+
+//
+//fn SoftRepulsion(r, rodlength) {
+//    if (r < rodlength){
+//    return 1/r
+//    }
+//    else return 0 
+//}
+//
+//fn SoftRepulsionGrad(r, rodlength) {
+//    if (r < rodlength){
+//    return -1/r^2
+//    }
+//    else return 0 
+//}
+//
+//testing mode (not functional)
+//fn MicroscopicConstraint2(mesh, problem, sel1, sel2, rodlength){
+//    
+//	var idlist1 = Matrix(sel1.idlistforgrade(0))
+//	var idlist2 = Matrix(sel2.idlistforgrade(0))
+//	var pointsel = Selection(mesh)
+//	pointsel.setindex(0,Int(idlist1[0]),true)
+//	pointsel.setindex(0,Int(idlist2[0]),true)
+//    var pw = PairwisePotential(fn (r) SoftRepulsion(r, rodlength), fn (r) SoftRepulsionGrad(r, rodlength), cutoff=0.1*rodlength)    
+//
+//    problem.addenergy(pw, selection=pointsel, prefactor = 100)
+//
+//
+//	
+//	for (id1 in idlist1) {
+//          	for (id2 in idlist2){
+//			var pointsel = Selection(mesh)
+//			pointsel.setindex(0,Int(id1),true)
+//			pointsel.setindex(0,Int(id2),true)
+//            pointsel.addgrade(1)
+//			problem.addlocalconstraint(Len, selection = pointsel, target=rodlength, onesided = true)
+//		}
+//	}
+//}
+
+
+
+fn addlengthminimum(problem, target, selection=nil, field=nil){    
+    var functional = Length()
+    var cons = Constraint(functional, target)
+    cons.selection = selection
+    cons.field = field
+    cons.prefactor = 1
+    cons.onesided = true
+    problem.constraints.append(cons)
+}
+
+fn addleftrightconstraint(problem, leftwall, rightwall, field){    
+
+    var xcon = LineIntegral(fn (x, n) n[0]^2, field)
+    var ycon = LineIntegral(fn (x, n) n[1]^2, field)
+    var zcon = LineIntegral(fn (x, n) n[2]^2, field)
+
+    var xcons = Constraint(xcon, 0)
+    var ycons = Constraint(ycon, 0)
+
+    xcons.selection = leftwall.union(rightwall)
+    xcons.field = field
+    xcons.prefactor = 1
+    xcons.onesided = false
+    problem.constraints.append(xcons)
+
+    ycons.selection = leftwall.union(rightwall)
+    ycons.field = field
+    ycons.prefactor = 1
+    ycons.onesided = false
+    problem.constraints.append(ycons)
+}
+
+fn addtopbottomconstraint(problem, bottomwall, topwall, field){    
+
+    var xcon = LineIntegral(fn (x, n) n[0]^2, field)
+    var ycon = LineIntegral(fn (x, n) n[1]^2, field)
+    var zcon = LineIntegral(fn (x, n) n[2]^2, field)
+
+    var xcons = Constraint(xcon, 0)
+
+    xcons.selection = bottomwall.union(topwall)
+    xcons.field = field
+    xcons.prefactor = 1
+    xcons.onesided = false
+    problem.constraints.append(xcons)
+
+}
+
+fn addlengthconstraints(problem, mesh, sel1, sel2, rodlength){
+
+    
+    // Get ID lists from the two selections
+
+    var idlist1 = Matrix(sel1.idlistforgrade(0))
+	var idlist2 = Matrix(sel2.idlistforgrade(0))
+	
+    // Create Selections for each pair of points and apply the constraint
+
+	for (id1 in idlist1) {
+          	for (id2 in idlist2){
+			    var pointsel = Selection(mesh)
+			    pointsel.setindex(0,Int(id1),true)
+			    pointsel.setindex(0,Int(id2),true)
+                pointsel.addgrade(1)
+//                Show(plotselection(mesh, pointsel, grade=[0,1]))
+                addlengthminimum(problem, rodlength, selection=pointsel)
+		}
+    }
+}
+
+
+fn EnergiesToFile(path, str, sopt, fopt) {
+    var sonum = Matrix(sopt.energy).dimensions()[0]-1
+    var fonum = Matrix(fopt.energy).dimensions()[0]-1
+    var fs = File("${path}/${str}sopt.txt", "w")
+    for (i in 0..sonum) fs.write("${sopt.energy[i]}")
+    var ff = File("${path}/${str}fopt.txt", "w")
+    for (i in 0..fonum) ff.write("${fopt.energy[i]}")
+    fs.close()
+    ff.close()
+}
+
+fn ListToFile(str, list){
+    var f = File("${pathexport}/${str}.txt", "w")
+    for (dat in list) f.write(dat)
+    f.close()
+}
+
+
+ // //Initialize a field
+fn AddNematicFieldEnergy(mesh, sel, problem, Lregion, Hregion, Ksplay, Ktwist, Kbend, q, C) {
+    var K = Ktwist
+// 0.1*Matrix([2*random()-1, 2*random()-1, 2*random()-1]) +
+    var nn = Field(mesh, fn(x,y,z)  Matrix([0,sin(Pi/2 + Pi/2*arctan(x*sqrt(C/K))/arctan(Lregion/2*sqrt(C/K))),cos(Pi/2 + Pi/2*arctan(x*sqrt(C/K))/arctan(Lregion/2*sqrt(C/K)))])) 
+    var nem = Nematic(nn, ksplay = Ksplay, ktwist = Ktwist, kbend = Kbend, pitch = q)
+    problem.addenergy(nem, selection = sel)
+    return [nn, nem]
+}
+
+// For restricting the X-component locally
+class XCompSquared {
+    init(vec) {
+        self.vec = vec
+    }
+    integrand(vec) {
+        var intg = vec.op(fn (x) x[0]^2)
+        return intg.linearize().transpose()
+    }
+
+    fieldgradient(vec, mesh) {
+        // print vec
+        var fg = vec.op(fn (x) Matrix([2*x[0], 0, 0]))
+        return fg
+    }
+
+    total(vec) {
+        return self.integrand(vec).sum()
+    }  
+}
+// For restricting the Y-component locally
+class YCompSquared {
+    init(vec) {
+        self.vec = vec
+    }
+    integrand(vec) {
+        var intg = vec.op(fn (x) x[1]^2)
+        return intg.linearize().transpose()
+    }
+
+    fieldgradient(vec, mesh) {
+        // print vec
+        var fg = vec.op(fn (x) Matrix([0, 2*x[1], 0]))
+        return fg
+    }
+
+    total(vec) {
+        return self.integrand(vec).sum()
+    }  
+}
+// For restricting the Z-component locally
+class ZCompSquared {
+    init(vec) {
+        self.vec = vec
+    }
+    integrand(vec) {
+        var intg = vec.op(fn (x) x[2]^2)
+        return intg.linearize().transpose()
+    }
+
+    fieldgradient(vec, mesh) {
+        // print vec
+        var fg = vec.op(fn (x) Matrix([0,0, 2*x[2]]))
+        return fg
+    }
+
+    total(vec) {
+        return self.integrand(vec).sum()
+    }  
+}
+
+// Add a tilt energy functional C/2*sin^2(theta)
+fn tIntegrand(x, n) {                   
+    return (1-(n[2])^2)
+}
+
+fn AddTiltEnergy(problem, nn, C) {
+    var tilt = AreaIntegral(tIntegrand, nn) 
+    problem.addenergy(tilt, prefactor = C/2)
+}
+fn lIntegrand(x, n){
+    return (1)
+}
+
+// Add an anisotropic line tension functional
+// fn lIntegrand(x, n){
+//     return (1 + (1 - n.inner(tangent())^2))
+// }
+
+fn AddEdgeEnergy(problem, sel, nn, g) {
+    var lten = LineIntegral(lIntegrand, nn)
+    problem.addenergy(lten, selection=sel, prefactor = g)
+}
+
+fn AddPressure(problem, f) {
+    problem.addenergy(Area(), prefactor=(-f))
+}
+
+fn AddConstraints(problem, reg, mesh,  UpperWall, LowerWall, LeftWall, RightWall, UpperWallCent, LowerWallCent, porebndtop, porebndbottom, nn, Hregion, Lregion, rodlength) {
+
+
+    // Add a level set to keep things in the z axis
+
+    var lcons = ScalarPotential(fn (x,y,z) z)    
+    problem.addlocalconstraint(lcons)
+    reg.addlocalconstraint(lcons)  
+
+    
+    // Add Length constraint between boundaries
+    
+    addlengthconstraints(problem, mesh, porebndtop, UpperWallCent, rodlength/2)
+    addlengthconstraints(problem, mesh, porebndbottom, LowerWallCent, rodlength/2)
+
+
+    // Add level set to all walls
+
+    var topwall = ScalarPotential(fn (x,y,z) (y - Hregion/2))
+    var bottomwall = ScalarPotential(fn (x,y,z) (y + Hregion/2))
+    var rightwall = ScalarPotential(fn (x,y,z) (x - Lregion/2))
+    var leftwall = ScalarPotential(fn (x,y,z) (x + Lregion/2))
+
+    problem.addlocalconstraint(topwall, selection = UpperWall, target = 0)
+    problem.addlocalconstraint(bottomwall, selection = LowerWall, target = 0)
+    problem.addlocalconstraint(rightwall, selection = RightWall, target = 0)
+    problem.addlocalconstraint(leftwall, selection = LeftWall, target = 0)
+    
+    
+    // Add a constraint on nx on top and bottom walls
+
+    addleftrightconstraint(problem, LeftWall, RightWall, nn)
+    addtopbottomconstraint(problem, LowerWall, UpperWall, nn)
+//    var xcon = LineIntegral(fn (x, n) n[0]^2, nn)
+//    var ycon = LineIntegral(fn (x, n) n[1]^2, nn)
+//    var zcon = LineIntegral(fn (x, n) n[2]^2, nn)
+//    var xycon = LineIntegral(fn (x, n) n[0]^2 + n[1]^2, nn)
+//
+//    var zcon2 = ScalarPotential(fn (x, n) n[2]^2)
+//
+//    problem.addconstraint(xcon, field=nn, selection = UpperWall)
+//    problem.addconstraint(xcon, field=nn, selection = LowerWall)
+//
+//    // Add an anchor on the left and right walls
+//    
+//    problem.addconstraint(xcon, field=nn, selection = LeftWall) 
+//    problem.addconstraint(xcon, field=nn, selection = RightWall)
+//
+//   
+//    problem.addconstraint(zcon, field=nn, selection = LeftWall) 
+//    problem.addconstraint(zcon, field=nn, selection = RightWall) 
+//
+//    problem.addlocalconstraint(zcon2, selection = RightWall, target = 1)
+//    problem.addlocalconstraint(zcon2, selection = LeftWall, target = 1)
+//
+    // Unit vector constraint 
+
+    var lnorm = NormSq(nn)                      
+    problem.addlocalconstraint(lnorm, field=nn, target=1) 
+}
+
+
+
+fn CreateOptimizers(problem, reg, mesh, sel, LeftWall, RightWall, UpperWall, LowerWall, porebnd, nn) {
+
+    
+    // Create Problem Adapter and Controller    
+
+    var adapt = ProblemAdapter(problem, mesh, nn)     
+    var control = PenaltyController(adapt, verbosity="quiet")
+    control.ctol = 1e-6
+
+
+    var leq = EquiElement() 
+    reg.addenergy(leq,selection = sel, prefactor = 1)         
+    var ropt = ShapeOptimizer(reg, mesh)
+    ropt.steplimit = 0.05
+    ropt.stepsize = 0.01
+    ropt.steplimit = 0.05
+    ropt.fix(porebnd)
+    ropt.fix(RightWall)
+    ropt.fix(LeftWall)
+    ropt.fix(UpperWall)
+    ropt.fix(LowerWall)
+    ropt.quiet=true
+
+    return [control, ropt]
+}
+
+fn Optimization(str, mesh, nn, control, ropt, sel=nil) {
+    var iterations = 30
+    var vtkE = VTKExporter(nn)
+    var h = 0
+    vtkE.export("${pathexport}/${str}_${h}.vtk")
+    var Break = false
+//    var A = Area()
+
+    for (i in 0...iterations) {
+//        if (A.total(mesh) > Lreg*Hreg){break}
+            print("optimizing: step ${h+1}/${iterations}")
+            ropt.conjugategradient(5)
+            equiangulate(mesh, quiet=true, fix=sel)
+            control.optimize(1)
+            h=h+1
+            vtkE.export("${pathexport}/${str}_${h}.vtk")
+            if (control.hasConverged()) {
+                print("Convergence Achieved")
+                break                
+            }
+    }
+}
+
+
+
+var str = "SinglePoreg${gstar}p${pstar}q${qstar}"
+var vtkMI = VTKImporter(String(initialmeshpath,"/InitialMeshR=0.5.vtk"))
+var mesh = vtkMI.mesh()
+
+
+var Selections = CreateSelections(mesh, Lreg, Hreg, Rp, dx)
+var LeftWall = Selections[0], RightWall = Selections[1], UpperWall = Selections[2], LowerWall = Selections[3], bnds = Selections[4], porebnd = Selections[5], porebndtop=Selections[6], porebndbottom=Selections[7], LowerWallCent=Selections[8], UpperWallCent=Selections[9]
+
+var constbottom = LowerWallCent.union(porebndbottom)
+var consttop =  UpperWallCent.union(porebndtop)
+constbottom.addgrade(1)
+consttop.addgrade(1)
+
+var constsel = consttop.union(constbottom)
+
+Show(plotselection(mesh, constsel, grade = [0,1,2]))
+
+var meshsel = Selection(mesh, fn (x,y,z) true)
+meshsel.addgrade(1)
+meshsel.addgrade(2)
+meshsel = meshsel.difference(constsel)
+meshsel = meshsel.union(bnds)
+
+var problem = OptimizationProblem(mesh)
+var reg = OptimizationProblem(mesh) 
+
+var fe = AddNematicFieldEnergy(mesh, meshsel, problem, Lreg, Hreg, 1,1,1, qstar, 1)
+var nn = fe[0], nem = fe[1]
+AddTiltEnergy(problem, nn, 1)
+AddEdgeEnergy(problem, porebnd, nn, gstar)
+AddPressure(problem, pstar)
+AddConstraints(problem, reg, mesh, UpperWall, LowerWall, LeftWall, RightWall, UpperWallCent, LowerWallCent, porebndtop, porebndbottom, nn, Hreg, Lreg, onerodlength)
+problem.addenergy(EquiElement(), prefactor=0.02, selection = meshsel)
+var Optimizers = CreateOptimizers(problem, reg, mesh, meshsel, LeftWall, RightWall, UpperWall, LowerWall, porebnd, nn)
+var control = Optimizers[0], ropt = Optimizers[1]
+
+Optimization(str, mesh, nn, control,ropt, sel=constsel)
+
+Show(plotmesh(mesh, grade = [0,1,2]))
+
+
+
+

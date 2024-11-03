@@ -1,0 +1,120 @@
+// Here I try to model the expulsion of twist in a colloidal membrane 
+// where the area is fixed and the free energy functionals include:
+//   K( (∇.n)^2 + (n.∇xn - q)^2 + (nx∇xn)^2 ) + C( 1-(n.z)^2 )
+
+import meshgen
+import meshtools
+import kdtree
+import plot
+import optimize
+import constants
+import functionals
+import vtk
+
+var K = 1
+var C = 25
+var lambda = sqrt(K/C)
+var q = 0.75/lambda
+var gamma = 1
+var R = 1
+
+// Units are in 10s of microns
+var dom = CircularDomain(Matrix([0,0]), R)
+var mg = MeshGen(dom, [-R..R:0.05, -R..R:0.05], quiet=false)
+var mesh = mg.build()
+var mesh = ChangeMeshDimension(mesh, 3)
+var col = Selection(mesh, fn (x,y,z) sqrt(x^2 + y^2) < R + 0.01)
+var bnd = Selection(mesh, boundary=true)
+var inner = Selection(mesh, fn (x,y,z) sqrt(x^2 + y^2) < R - 0.01)
+
+var pathex = "/home/repos/colloidal_membranes_v2/colloidal_disk_benchmarking/R=5new"
+
+mesh.addgrade(1)
+mesh.addgrade(2)
+col.addgrade(0)
+col.addgrade(1)
+col.addgrade(2)
+
+bnd.addgrade(0)
+bnd.addgrade(1)
+
+inner.addgrade(0)
+inner.addgrade(1)
+inner.addgrade(2)
+
+Show(plotmesh(mesh, grade = [0,1]))
+
+
+
+//Initialize a random field with positive z component
+//var nn = Field(mesh, fn(x,y,z) Matrix([0,0,1])) 
+var nn = Field(mesh, fn(x,y,z) Matrix([(0.1-0.2*random()),(0.1-0.2*random()),(0.75 + 0.25*random())]))  
+
+
+ // Create an OptimizationProblem with our mesh as the target
+var problem=OptimizationProblem(mesh) 
+
+ // Add an Area functional as a global constraint
+var larea = Area()                                         
+problem.addconstraint(larea, selection = col) 
+
+// Add a nematic energy functional 
+var nem = Nematic(nn, ksplay = K, ktwist = K, kbend = K, pitch = q)
+problem.addenergy(nem, selection = col) 
+
+// Add a tilt energy functional
+fn tIntegrand(x, n) {                   
+    return 1-(n[2])^2
+}
+var tilt = AreaIntegral(tIntegrand, nn) // Tilt term due to smectic order as an inner product
+problem.addenergy(tilt, selection = col, prefactor = C/2)
+
+// Add a level set to keep things in the z axis
+var lcons = ScalarPotential(fn (x,y,z) z)                     
+problem.addlocalconstraint(lcons, selection=col) 
+
+// Add a line tension functional
+fn lIntegrand(x, n) {
+    return (gamma*(1 - 2*(n.inner( tangent()))^2) )
+}
+var lten = LineIntegral(lIntegrand, nn)
+
+problem.addenergy(lten, selection=bnd)
+
+
+// Unit vector constraint 
+var lnorm = NormSq(nn)                      
+problem.addlocalconstraint(lnorm, field=nn, target=1) 
+
+
+// Create the field optimizer
+var fopt = FieldOptimizer(problem, nn)
+fopt.stepsize = 0.01
+// Create the shape optimizer
+var sopt = ShapeOptimizer(problem, mesh)   
+sopt.stepsize = 0.01
+/* Part 5: Regularization */
+var reg=OptimizationProblem(mesh)           // Create the Auxiliary regularization problem
+
+var leq = EquiElement()                     // Try to equalize elements
+reg.addenergy(leq)
+reg.addlocalconstraint(lcons, selection=col) // Also respect the level set constraint
+
+var ropt = ShapeOptimizer(reg, mesh)        // We use a separate regularization optimizer
+ropt.stepsize = 0.001
+ropt.fix(bnd)
+
+var bopt = ShapeOptimizer(reg, mesh)
+bopt.stepsize = 0.001
+bopt.fix(inner)
+
+var str = pathex + "/" + "CollMemb"
+
+var vtkE = VTKExporter(nn)
+vtkE.export(String(str,"_0.vtk"))
+
+for (i in 0...31) {
+	fopt.relax(2)
+	fopt.conjugategradient(2)
+	vtkE.export(String(str,"_",i+1,".vtk"))
+}

@@ -28,9 +28,8 @@ var onerodlength = 0.5/lamt
 
 // Import/Export Destination
 
-var pathexport = "/home/gabriel/Desktop/ProjectFiles/ColloidalMembranes/VTKMega/Round9/q=${qstar} g=${gstar}"
-var pathenergies = "/home/gabriel/Desktop/ProjectFiles/ColloidalMembranes/CodeMega/DataAnalysis/Round9/EnergyPerIteration"
-var initialmeshpath = "/home/gabriel/Desktop/ProjectFiles/ColloidalMembranes/VTKMega/Round9"
+var pathexport = "/home/repos/colloidal_membranes_v2/vtk_results/Round9/q=${qstar} g=${gstar}"
+var initialmeshpath = "/home/repos/colloidal_membranes_v2/vtk_results/Round9"
 
 // --------------------------------------------------
 
@@ -45,8 +44,8 @@ fn CreateSelections(mesh, Lregion, Hregion, Rpore, Grain) {
     var LowerWallReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + Grain)
     var UpperWallReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - Grain)
 
-    var LowerWallCentReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + 2*Grain and abs(x) < 2*Rpore)
-    var UpperWallCentReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - 2*Grain and abs(x) < 2*Rpore - Grain/4)
+    var LowerWallCentReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + 2*Grain and abs(x) < Lregion/8)
+    var UpperWallCentReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - 2*Grain and abs(x) < Lregion/8)
     var bnds = Selection(mesh, boundary=true)
     bnds.addgrade(0)
     LeftWallReg.addgrade(0)
@@ -446,6 +445,8 @@ constbottom.addgrade(1)
 consttop.addgrade(1)
 
 var constsel = consttop.union(constbottom)
+
+Show(plotselection(mesh, constsel, grade = [0,1,2]))
 
 var meshsel = Selection(mesh, fn (x,y,z) true)
 meshsel.addgrade(1)
