@@ -1,0 +1,232 @@
+// Do Not Change Line Numbering ---------------------
+import meshgen
+import meshtools
+import plot
+import optimize
+import optimize4
+import vtk
+import functionals
+
+// Region Dimensions
+var K = 1
+var C = 2
+var lamt = sqrt(K/C)
+var dx = 0.15/lamt
+var Hreg = 4/lamt + dx/2
+var Lreg = 12/lamt + dx/2
+// for this example, we use g=0.3
+var q = 0.4
+
+// Import/Export Destination
+
+var pathexport = "/home/gabriel/Repositories/colloidal_membranes_v2/vtk_results/Round9_byellipse/initialmeshes"
+
+
+// --------------------------------------------------
+// q=0.6
+
+//	fn eqradius(x,y){
+        //	var th = arctan(y/x)
+        //	var a0 = 1.5346528827652526
+        //	var a1 = -0.4954421239213099
+        //	var a2 = 0.13524769133488931
+        //	var a3 = -0.041655842868202154
+        //	var a4 = 0.012764910834267146
+        //	var b1 = -0.004966700773429449
+        //	var b2 = -0.0015462356926405688
+        //	var b3 = 0.0030771597253920367
+        //	var b4 = -0.0016596987854921824
+        //	var w = 1.9971829036114959
+        //	var rad = a0 + a1*cos(w*th) + a2*cos(2*w*th) + a3*cos(3*w*th) + a4*cos(4*w*th) + b1*sin(w*th) + b2*sin(2*w*th) + b3*sin(3*w*th) + b4*sin(4*w*th)
+        //	return rad
+//	}
+
+
+// --------------------------------------------------
+// q=0.5
+
+//	fn eqradius(x,y){
+        //	var th = arctan(y/x)
+        //	var a0 = 1.3681217803425512
+        //	var a1 = -0.6755890761809283
+        //	var a2 = 0.22947830284837856
+        //	var a3 = -0.07715690847970186
+        //	var a4 = 0.018474243422962437
+        //	var a5 = 0.00036287557938491003
+        //	var a6 = -0.0038924766896469023
+        //	var a7 = 0.002702647342744634
+        //	var a8 = -0.0003964639602910386
+        //	var b1 = 0.0033320872321574283
+        //	var b2 = -0.00488352667652822
+        //	var b3 = 0.0013764763980155792
+        //	var b4 = 0.0005214446489174734
+        //	var b5 = -0.0012619356256259155
+        //	var b6 = -0.0002511140855627455
+        //	var b7 = 5.479754066492498e-05
+        //	var b8 = 0.0004091635759871864
+        //	var w = 2.003439398009405
+        //	var rad = a0 + a1*cos(w*th) + a2*cos(2*w*th) + a3*cos(3*w*th) + a4*cos(4*w*th) + a5*cos(5*w*th) + a6*cos(6*w*th) + a7*cos(7*w*th) + a8*cos(8*w*th) + b1*sin(w*th) + b2*sin(2*w*th) + b3*sin(3*w*th) + b4*sin(4*w*th) + b5*sin(5*w*th) + b6*sin(6*w*th) + b7*sin(7*w*th) + b8*sin(8*w*th)
+        //	return rad
+//	}
+
+
+
+// --------------------------------------------------
+// q=0.4
+
+fn eqradius(x,y){
+        var th = arctan(y/x)
+	var a0 = 1.191768739389424
+        var a1 = -0.7917233430767285
+        var a2 = 0.3432593146222085
+        var a3 = -0.13937528467678606
+        var a4 = 0.04327314923833934
+        var a5 = -0.004339768643765218
+        var a6 = -0.006403256528936867
+        var a7 = 0.007575033026514367
+        var a8 = -0.006511212827280564
+        var b1 = 0.00588682038755809
+        var b2 = -0.005617541325400933
+        var b3 = 0.0063907088286106134
+        var b4 = -0.0031209573604672096
+        var b5 = -0.0026176021366210865
+        var b6 = 0.006178577894669196
+        var b7 = -0.004868299759773939
+        var b8 = 0.002472092888032804
+        var w = 1.9909439250167793
+        var rad = a0 + a1*cos(w*th) + a2*cos(2*w*th) + a3*cos(3*w*th) + a4*cos(4*w*th) + a5*cos(5*w*th) + a6*cos(6*w*th) + a7*cos(7*w*th) + a8*cos(8*w*th) + b1*sin(w*th) + b2*sin(2*w*th) + b3*sin(3*w*th) + b4*sin(4*w*th) + b5*sin(5*w*th) + b6*sin(6*w*th) + b7*sin(7*w*th) + b8*sin(8*w*th)
+        return rad
+}
+// --------------------------------------------------
+// q=0.3
+
+//	fn eqradius(x,y){
+	//	var th = arctan(y/x)
+	//	var a0 = 1.074593583599273
+	//	var a1 = -0.8217386384073712
+	//	var a2 = 0.4128102731497592
+	//	var a3 = -0.19891622825238622
+	//	var a4 = 0.07657645032598855
+	//	var a5 = -0.01442343160502463
+	//	var a6 = -0.015215576224173459
+	//	var a7 = 0.02089399306426409
+	//	var a8 = -0.01852087773986715
+	//	var b1 = 0.0036566065247114615
+	//	var b2 = -0.0027976726671349447
+	//	var b3 = 0.008845025741747885
+	//	var b4 = -0.0026025146070125372
+	//	var b5 = -0.00045550569913888647
+	//	var b6 = -3.913996099168868e-05
+	//	var b7 = -0.0004388071189861554
+	//	var b8 = 0.0004884773859446667
+	//	var w = 1.9986816002981747	
+	//	var rad = a0 + a1*cos(w*th) + a2*cos(2*w*th) + a3*cos(3*w*th) + a4*cos(4*w*th) + a5*cos(5*w*th) + a6*cos(6*w*th) + a7*cos(7*w*th) + a8*cos(8*w*th) + b1*sin(w*th) + b2*sin(2*w*th) + b3*sin(3*w*th) + b4*sin(4*w*th) + b5*sin(5*w*th) + b6*sin(6*w*th) + b7*sin(7*w*th) + b8*sin(8*w*th)
+ 	//	return rad
+//	}
+
+fn CreateAndSaveMesh(Lregion, Hregion, Grain, str, scale, stscale){
+        var hs0 = HalfSpaceDomain(Matrix([0,Hregion]), Matrix([0,1]))
+        var hs1 = hs0.difference(HalfSpaceDomain(Matrix([0,Hregion/2+Grain/2]), Matrix([0,-1])))
+        var hs2 = hs1.difference(HalfSpaceDomain(Matrix([0,-Hregion/2-Grain/2]), Matrix([0,1])))
+        var hs3 = hs2.difference(HalfSpaceDomain(Matrix([Lregion/2,0]), Matrix([-1,0])))
+        var rect = hs3.difference(HalfSpaceDomain(Matrix([-Lregion/2,0]), Matrix([1,0])))
+        var pore = Domain(fn (x) -(x[0]^2 + x[1]^2 - (stscale*eqradius(x[0], x[1]))^2))
+        var dom = rect.difference(pore)
+        var mg = MeshGen(dom, [-Lregion/2..Lregion/2:Grain, -Hregion/2..Hregion/2+0.01:Grain], quiet=false)
+        var meshe = mg.build()
+        var mesh = ChangeMeshDimension(meshe, 3)
+        mesh.addgrade(1)
+        mesh.addgrade(2)
+	var bnd = Selection(mesh, boundary=true)
+        bnd.addgrade(0)
+        var inner = Selection(mesh, fn(x,y,z) abs(y) < (Hregion/2 - Grain) and abs(x) < (Hregion/2 - Grain))
+        var Rpsel = bnd.intersection(inner)
+        Rpsel.addgrade(1)
+        var Rosel = bnd.difference(Rpsel)
+	var wiremesh = Selection(mesh, fn(x,y,z) true).removegrade(2)
+	var LeftWallReg = Selection(mesh, fn(x,y,z) x <= -Lregion/2 + Grain/2)
+	var RightWallReg = Selection(mesh, fn(x,y,z) x >= Lregion/2 - Grain/2)
+        var LowerWallReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + Grain/2)
+        var UpperWallReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - Grain/2)
+	var LeftWall = bnd.intersection(LeftWallReg)
+	var RightWall = bnd.intersection(RightWallReg)
+	var LowerWall = bnd.intersection(LowerWallReg)
+	var UpperWall = bnd.intersection(UpperWallReg)
+	LeftWall.addgrade(1)
+	RightWall.addgrade(1)
+	UpperWall.addgrade(1)
+	LowerWall.addgrade(1)
+	var Lhalfsp = Rpsel.intersection(Selection(mesh, fn(x,y,z) x<=0))
+	var Rhalfsp = Rpsel.intersection(Selection(mesh, fn(x,y,z) x>0))
+	var Thalfsp = Rpsel.intersection(Selection(mesh, fn(x,y,z) y>0))
+	var Bhalfsp = Rpsel.intersection(Selection(mesh, fn(x,y,z) y<=0))
+	//Show(plotselection(mesh, Rpsel, grade = [0,1,2]))
+	//Show(plotselection(mesh,LeftWall,grade=[0,1,2]))	
+	//Show(plotselection(mesh,RightWall,grade=[0,1,2]))	
+	//Show(plotselection(mesh,UpperWall,grade=[0,1,2]))	
+	//Show(plotselection(mesh,LowerWall,grade=[0,1,2]))	
+	var vtkME = VTKExporter(mesh)
+        //	vtkME.export(String(pathexport,"/",str,"_0.vtk"))
+	//	var h=0
+	for(var i=stscale; i>=scale; i-=0.025){
+		print("scale=${i} \n target scale=${scale} ")
+		
+                var shrinkpore = OptimizationProblem(mesh)
+		// Add invisalign to porebnd
+		var vertls = ScalarPotential(fn (x,y,z) x)
+		var nvertls = ScalarPotential(fn (x,y,z) -x)
+		var horils = ScalarPotential(fn (x,y,z) y)
+		var nhorils = ScalarPotential(fn (x,y,z) -y)
+		shrinkpore.addlocalconstraint(vertls, selection = Rhalfsp, target = 0, onesided=true)
+                shrinkpore.addlocalconstraint(nvertls, selection = Lhalfsp,  target = 0, onesided=true)
+                shrinkpore.addlocalconstraint(horils, selection = Thalfsp, target = 0, onesided=true)
+                shrinkpore.addlocalconstraint(nhorils, selection = Bhalfsp, target = 0, onesided=true)
+                // Add level set to all walls
+                var topwall = ScalarPotential(fn (x,y,z) (y - Hregion/2))
+                var bottomwall = ScalarPotential(fn (x,y,z) (y + Hregion/2))
+                var rightwall = ScalarPotential(fn (x,y,z) (x - Lregion/2))
+                var leftwall = ScalarPotential(fn (x,y,z) (x + Lregion/2))
+                shrinkpore.addlocalconstraint(topwall, selection = UpperWall, target = 0)
+                shrinkpore.addlocalconstraint(bottomwall, selection = LowerWall, target = 0)
+                shrinkpore.addlocalconstraint(rightwall, selection = RightWall, target = 0)
+                shrinkpore.addlocalconstraint(leftwall, selection = LeftWall, target = 0)
+                var shrinkto = ScalarPotential(fn(x,y,z) (sqrt(x^2 + y^2) - i*eqradius(x,y))^2)
+		shrinkpore.addlocalconstraint(shrinkto, selection=Rpsel, target = 0)
+                shrinkpore.addenergy(EquiElement(), selection=Rpsel, prefactor=0.5)
+                //	shrinkpore.addenergy(shrinkto, selection=Rpsel, prefactor=50)
+                var adapt = ProblemAdapter(shrinkpore, mesh)
+                var control = PenaltyController(adapt, verbosity="quiet", controller=ConjugateGradientController)
+                control.optimize(10)
+		//	h+=1
+        	//	vtkME.export(String(pathexport,"/",str,"_${h}.vtk"))
+         //       equiangulate(mesh, fix=bnd)
+        }
+	var regularize = OptimizationProblem(mesh)
+        regularize.addenergy(EquiElement(), selection=wiremesh) 
+	var ropt = ShapeOptimizer(regularize, mesh)
+	ropt.fix(Rpsel)
+	ropt.fix(LeftWall)
+	ropt.fix(RightWall)
+	ropt.fix(UpperWall)
+	ropt.fix(LowerWall)
+	for(var i=0; i<50; i+=1){
+		equiangulate(mesh, fix=bnd)
+		ropt.linesearch(10)
+		//	h+=1
+        	//	vtkME.export(String(pathexport,"/",str,"_${h}.vtk"))
+ 	}
+	vtkME.export(String(pathexport,"/",str,".vtk"))
+        return
+}
+
+for(var i=1.0; i>0.0; i-=0.025){
+	var ist = i
+	if(i<0.75){
+		ist += 0.1
+	}
+	if(i<0.25){
+		ist += 0.1
+	}
+	print("i=${i}, ist=${ist}")
+	var gs = CreateAndSaveMesh(Lreg, Hreg, dx, "InitialMeshq=${q}s=${i.format("%4.3f")}", i, ist)
+}

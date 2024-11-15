@@ -17,9 +17,15 @@ var Lreg = 12/lamt
 var Rp = 0.5/lamt
 var Rst = 0.75/lamt
 
+var Rp[59] = [0.025/lamt, 0.0375/lamt, 0.05/lamt, 0.0625/lamt, 0.075/lamt, 0.0875/lamt, 0.1/lamt, 0.1125/lamt, 0.125/lamt, 0.1375/lamt, 0.15/lamt, 0.1625/lamt, 0.175/lamt, 0.1875/lamt, 0.2/lamt, 0.2125/lamt, 0.225/lamt, 0.2375/lamt, 0.25/lamt, 0.2625/lamt, 0.275/lamt, 0.2875/lamt, 0.3/lamt, 0.3125/lamt, 0.325/lamt, 0.3375/lamt, 0.35/lamt, 0.3625/lamt, 0.375/lamt, 0.3875/lamt, 0.4/lamt, 0.4125/lamt, 0.425/lamt, 0.4375/lamt, 0.45/lamt, 0.4625/lamt, 0.475/lamt, 0.4875/lamt, 0.5/lamt, 0.5125/lamt, 0.525/lamt, 0.5375/lamt, 0.55/lamt, 0.5625/lamt, 0.575/lamt, 0.5875/lamt, 0.6/lamt, 0.6125/lamt, 0.625/lamt, 0.6375/lamt, 0.65/lamt, 0.6625/lamt, 0.675/lamt, 0.6875/lamt, 0.7/lamt, 0.7125/lamt, 0.725/lamt, 0.7375/lamt, 0.75/lamt]
+
+var Rst[59] = [0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.25/lamt, 0.35/lamt, 0.35/lamt, 0.35/lamt, 0.35/lamt, 0.35/lamt, 0.35/lamt, 0.35/lamt, 0.35/lamt, 0.45/lamt, 0.45/lamt, 0.45/lamt, 0.45/lamt, 0.45/lamt, 0.45/lamt, 0.45/lamt, 0.45/lamt, 0.55/lamt, 0.55/lamt, 0.55/lamt, 0.55/lamt, 0.55/lamt, 0.55/lamt, 0.55/lamt, 0.55/lamt, 0.65/lamt, 0.65/lamt, 0.65/lamt, 0.65/lamt, 0.65/lamt, 0.65/lamt, 0.65/lamt, 0.65/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt, 0.75/lamt]
+
+var Rlabels[59] = ["0.025", "0.0375", "0.05", "0.0625", "0.075", "0.0875", "0.1", "0.1125", "0.125", "0.1375", "0.15", "0.1625", "0.175", "0.1875", "0.2", "0.2125", "0.225", "0.2375", "0.25", "0.2625", "0.275", "0.2875", "0.3", "0.3125", "0.325", "0.3375", "0.35", "0.3625", "0.375", "0.3875", "0.4", "0.4125", "0.425", "0.4375", "0.45", "0.4625", "0.475", "0.4875", "0.5", "0.5125", "0.525", "0.5375", "0.55", "0.5625", "0.575", "0.5875", "0.6", "0.6125", "0.625", "0.6375", "0.65", "0.6625", "0.675", "0.6875", "0.7", "0.7125", "0.725", "0.7375", "0.75"]
+
 // Import/Export Destination
 
-var pathexport = "/home/repos/colloidal_membranes_v2"
+var pathexport = "/home/gabriel/Repositories/colloidal_membranes_v2/vtk_results/Round9_byradius/initialmeshes"
 
 // --------------------------------------------------
 
@@ -44,9 +50,9 @@ fn CreateAndSaveMesh(Lregion, Hregion, Rstart, Rpore, Grain, str){
         Rpsel.addgrade(1)
         var Rosel = bnd.difference(Rpsel)
 
-        for (i in 1..Int((Rstart - Rpore)/0.05)) {
+        for (i in 1..Int((Rstart - Rpore)/0.0125)) {
             var shrinkpore = OptimizationProblem(mesh)
-            var shrinkto = ScalarPotential(fn(x,y,z) (x^2 + y^2 - (Rstart-i*0.05)^2)^2)
+            var shrinkto = ScalarPotential(fn(x,y,z) (x^2 + y^2 - (Rstart-i*0.0125)^2)^2)
             shrinkpore.addenergy(shrinkto, selection=Rpsel, prefactor = 1)
             var ropt = ShapeOptimizer(shrinkpore, mesh)
             ropt.fix(Rosel)
@@ -155,19 +161,21 @@ fn CreateSelections(mesh, Lregion, Hregion, Rpore, Grain) {
     UpperWall.addgrade(1)
     LowerWall.addgrade(1)
 
-    Show(plotselection(mesh, UpperWallCent, grade = [0,1]))
-    Show(plotselection(mesh, LowerWallCent, grade = [0,1]))
     return [LeftWall, RightWall, UpperWall, LowerWall, bnds, porebnd, porebndtop, porebndbottom, LowerWallCent, UpperWallCent]
 }
 
 
-var mesh1 = CreateAndSaveMesh(Lreg, Hreg, Rst, Rp, dx, String("InitialMeshR=0.5"))
 
-var Sels = CreateSelections(mesh1, Lreg, Hreg, Rp, dx)
-var UpperWall = Sels[2], LowerWall = Sels[3], porebndtop = Sels[6], porebndbottom = Sels[7], lowerwallcent = Sels[8], upperwallcent = Sels[9]
-
-var mesh2 = AddConnectionsToMesh(mesh1, porebndtop, upperwallcent)
-var mesh3 = AddConnectionsToMesh(mesh2, porebndbottom, lowerwallcent)
-var vtkME = VTKExporter(mesh3)
-vtkME.export(String(pathexport,"/","InitialMeshR=0.5",".vtk"))
-
+for(var i=0; i<Rp.dimensions()[0]; i+=1){
+var mesh1 = CreateAndSaveMesh(Lreg, Hreg, Rst[i], Rp[i], dx, String("InitialMeshRp=${Rlabels[i]}"))
+Show(plotmesh(mesh1, grade = [0,1]))
+	if(Rp[i] >= 0.45){
+		var Sels = CreateSelections(mesh1, Lreg, Hreg, Rp[i], dx)
+		var UpperWall = Sels[2], LowerWall = Sels[3], porebndtop = Sels[6], porebndbottom = Sels[7], lowerwallcent = Sels[8], upperwallcent = Sels[9]
+		var mesh2 = AddConnectionsToMesh(mesh1, porebndtop, upperwallcent)
+		var mesh3 = AddConnectionsToMesh(mesh2, porebndbottom, lowerwallcent)
+		Show(plotmesh(mesh3, grade = [0,1]))
+		var vtkME = VTKExporter(mesh3)
+		vtkME.export(String(pathexport,"/","InitialMeshRp=${Rlabels[i]}",".vtk"))
+	}
+}

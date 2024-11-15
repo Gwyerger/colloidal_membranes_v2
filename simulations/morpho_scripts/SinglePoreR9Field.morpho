@@ -1,0 +1,212 @@
+// Do Not Change Line Numbering ---------------------
+import meshgen
+import meshtools
+import plot
+import optimize
+import optimize4
+import vtk
+import functionals
+
+// Theoretical Parameters
+
+// var Ksplay = 1
+// var Kbend = 1
+// var Ktwist = 1
+var K = 1
+var C = 2
+var lamt = sqrt(K/C)
+var qstar = 0.6
+var gstar = 0.3
+var pstar = 0.05
+
+// Region Dimensions
+var dx = 0.15/lamt
+var Hreg = 4/lamt
+var Lreg = 12/lamt
+
+// Import/Export Destination
+
+var pathexport = "/home/gabriel/Repositories/colloidal_membranes_v2/vtk_results/Round9_byellipse/q=${qstar} g=${gstar}"
+var initialmeshpath = "/home/gabriel/Repositories/colloidal_membranes_v2/vtk_results/Round9_byellipse/initialmeshes"
+
+// --------------------------------------------------
+
+
+fn modulus(a, b){
+    return (a/b - floor(a/b))*b
+}
+
+fn CreateSelections(mesh, Lregion, Hregion, Grain) {
+    var LeftWallReg = Selection(mesh, fn(x,y,z) x <= -Lregion/2 + Grain)
+    var RightWallReg = Selection(mesh, fn(x,y,z) x >= Lregion/2 - Grain)
+    var LowerWallReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + Grain)
+    var UpperWallReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - Grain)
+
+    var LowerWallCentReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + 2*Grain and abs(x) < Lregion/8)
+    var UpperWallCentReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - 2*Grain and abs(x) < Lregion/8)
+    var bnds = Selection(mesh, boundary=true)
+    bnds.addgrade(0)
+    LeftWallReg.addgrade(0)
+    RightWallReg.addgrade(0)
+    LowerWallReg.addgrade(0)
+    UpperWallReg.addgrade(0)
+    var inner = Selection(mesh, fn(x,y,z) abs(x)<Lregion/2-Grain and abs(y)<Hregion/2-Grain)
+    var porebnd = bnds.intersection(inner)
+    var LeftWall = bnds.intersection(LeftWallReg)
+    var RightWall = bnds.intersection(RightWallReg)
+    var LowerWall = bnds.intersection(LowerWallReg)
+    var UpperWall = bnds.intersection(UpperWallReg)
+    porebnd.addgrade(1)
+    LeftWall.addgrade(1)
+    RightWall.addgrade(1)
+    UpperWall.addgrade(1)
+    LowerWall.addgrade(1)
+    
+    return [LeftWall, RightWall, UpperWall, LowerWall, bnds, porebnd]
+}
+fn addleftrightconstraint(problem, leftwall, rightwall, field){
+
+    var xcon = LineIntegral(fn (x, n) n[0]^2, field)
+    var ycon = LineIntegral(fn (x, n) n[1]^2, field)
+    var zcon = LineIntegral(fn (x, n) n[2]^2, field)
+
+    var xcons = Constraint(xcon, 0)
+    var ycons = Constraint(ycon, 0)
+
+    xcons.selection = leftwall.union(rightwall)
+    xcons.field = field
+    xcons.prefactor = 1
+    xcons.onesided = false
+    problem.constraints.append(xcons)
+
+    ycons.selection = leftwall.union(rightwall)
+    ycons.field = field
+    ycons.prefactor = 1
+    ycons.onesided = false
+    problem.constraints.append(ycons)
+}
+fn addleftrightenergy(problem, leftwall, rightwall, field){
+
+	var xcon = LineIntegral(fn (x, n) n[0]^2, field)
+	var ycon = LineIntegral(fn (x, n) n[1]^2, field)
+
+	var sel = leftwall.union(rightwall)
+	problem.addenergy(xcon, selection = sel, prefactor=1)
+	problem.addenergy(ycon, selection = sel, prefactor=1)
+}
+
+fn addtopbottomconstraint(problem, bottomwall, topwall, field){
+
+    var xcon = LineIntegral(fn (x, n) n[0]^2, field)
+
+    var xcons = Constraint(xcon, 0)
+
+    xcons.selection = bottomwall.union(topwall)
+    xcons.field = field
+    xcons.prefactor = 1
+    xcons.onesided = false
+    problem.constraints.append(xcons)
+
+}
+fn addtopbottomenergy(problem, bottomwall, topwall, field){
+
+	var xcon = LineIntegral(fn (x, n) n[0]^2, field)
+
+	var sel = topwall.union(bottomwall)
+	problem.addenergy(xcon, selection = sel, prefactor=1)
+}
+ // //Initialize a field
+fn AddNematicFieldEnergy(mesh, problem, Lregion, Hregion, Ksplay, Ktwist, Kbend, q, C) {
+    var K = Ktwist
+    var nn = Field(mesh, fn(x,y,z)  Matrix([0,sin(Pi/2 + Pi/2*arctan(x*sqrt(C/K))/arctan(Lregion/2*sqrt(C/K))),cos(Pi/2 + Pi/2*arctan(x*sqrt(C/K))/arctan(Lregion/2*sqrt(C/K)))])) 
+    var nem = Nematic(nn, ksplay = Ksplay, ktwist = Ktwist, kbend = Kbend, pitch = q)
+    problem.addenergy(nem)
+    return [nn, nem]
+}
+
+// Add a tilt energy functional C/2*sin^2(theta)
+fn tIntegrand(x, n) {                   
+    return (1-(n[2])^2)
+}
+
+fn AddTiltEnergy(problem, nn, C) {
+    var tilt = AreaIntegral(tIntegrand, nn) 
+    problem.addenergy(tilt, prefactor = C/2)
+}
+fn lIntegrand(x, n){
+    return (1)
+}
+
+// Add an anisotropic line tension functional
+// fn lIntegrand(x, n){
+//     return (1 + (1 - n.inner(tangent())^2))
+// }
+
+fn AddEdgeEnergy(problem, sel, nn, g) {
+    var lten = LineIntegral(lIntegrand, nn)
+    problem.addenergy(lten, selection=sel, prefactor = g)
+}
+
+fn AddPressure(problem, f) {
+    problem.addenergy(Area(), prefactor=(-f))
+}
+
+fn AddConstraints(problem, anchor, UpperWall, LowerWall, LeftWall, RightWall, nn) {
+
+	// Add a constraint on nx on top and bottom walls
+
+//    addleftrightconstraint(problem, LeftWall, RightWall, nn)
+//    addtopbottomconstraint(problem, LowerWall, UpperWall, nn)
+	
+	addleftrightenergy(anchor, LeftWall, RightWall, nn)
+	addtopbottomenergy(anchor, LowerWall, UpperWall, nn)
+
+
+	// Unit vector constraint 
+	var lnorm = NormSq(nn)                      
+	problem.addlocalconstraint(lnorm, field=nn, target=1) 
+
+}
+
+
+
+fn CreateOptimizers(problem, anchor, obnds, mesh, nn) {
+    
+	// Create Problem Adapter and Controller    
+
+	//var adapt = ProblemAdapter(problem, nn)     
+	//var control = PenaltyController(adapt, verbosity="normal", mu0=10)
+	var anchopt = FieldOptimizer(anchor, nn)
+	var fopt = FieldOptimizer(problem, nn) 
+	fopt.fix(obnds)
+	return [fopt, anchopt]
+	//return [control]
+}
+
+fn Optimization(str, nn, fopt, anchopt) {
+	var iterations = 10
+	var vtkE = VTKExporter(nn)
+	anchopt.conjugategradient(50)
+	fopt.conjugategradient(200)
+	vtkE.export("${pathexport}/${str}.vtk")
+}
+
+
+for (var i=1.0; i>0.0; i-=0.025){
+	var str = "SinglePoreq=${qstar}s=${i.format("%4.3f")}"
+	var vtkMI = VTKImporter(String(initialmeshpath,"/InitialMeshq=${qstar}s=${i.format("%4.3f")}"))
+	var mesh = vtkMI.mesh()
+	var Selections = CreateSelections(mesh, Lreg, Hreg, dx)
+	var LeftWall = Selections[0], RightWall = Selections[1], UpperWall = Selections[2], LowerWall = Selections[3], bnds = Selections[4], porebnd = Selections[5]
+	//Show(plotselection(mesh,LeftWall, grade=[0,1,2]))
+	var anchor = OptimizationProblem(mesh)
+	var problem = OptimizationProblem(mesh)
+	var fe = AddNematicFieldEnergy(mesh, problem, Lreg, Hreg, 1,1,1, qstar, 1)
+	var nn = fe[0], nem = fe[1]
+	AddTiltEnergy(problem, nn, 1)
+	AddConstraints(problem, anchor, UpperWall, LowerWall, LeftWall, RightWall, nn)
+	var Optimizers = CreateOptimizers(problem ,anchor, bnds.difference(porebnd), mesh, nn)
+	var fopt = Optimizers[0]
+	var anchopt = Optimizers[1]
+	Optimization(str, nn, fopt, anchopt)
+}

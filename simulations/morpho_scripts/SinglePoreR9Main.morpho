@@ -13,7 +13,7 @@ import functionals
 // var Kbend = 1
 // var Ktwist = 1
 var K = 1
-var C = 2
+var C = 4
 var lamt = sqrt(K/C)
 var qstar = 0.6
 var gstar = 0.2
@@ -28,8 +28,8 @@ var onerodlength = 0.5/lamt
 
 // Import/Export Destination
 
-var pathexport = "/home/repos/colloidal_membranes_v2/vtk_results/Round9/q=${qstar} g=${gstar}"
-var initialmeshpath = "/home/repos/colloidal_membranes_v2/vtk_results/Round9"
+var pathexport = "/home/repos/colloidal_membranes_v2/vtk_results/Round9_byradius/R=${Rp}/q=${qstar} g=${gstar}"
+var initialmeshpath = "/home/repos/colloidal_membranes_v2/vtk_results/Round9_byradius/initialmeshes"
 
 // --------------------------------------------------
 
@@ -317,7 +317,7 @@ fn AddPressure(problem, f) {
     problem.addenergy(Area(), prefactor=(-f))
 }
 
-fn AddConstraints(problem, reg, mesh,  UpperWall, LowerWall, LeftWall, RightWall, UpperWallCent, LowerWallCent, porebndtop, porebndbottom, nn, Hregion, Lregion, rodlength) {
+fn AddConstraints(problem, reg, mesh,  UpperWall, LowerWall, LeftWall, RightWall, UpperWallCent, LowerWallCent, porebnd, porebndtop, porebndbottom, nn, Hregion, Lregion, rodlength) {
 
 
     // Add a level set to keep things in the z axis
@@ -376,6 +376,11 @@ fn AddConstraints(problem, reg, mesh,  UpperWall, LowerWall, LeftWall, RightWall
 
     var lnorm = NormSq(nn)                      
     problem.addlocalconstraint(lnorm, field=nn, target=1) 
+
+    // Area of pore constraint
+   // problem.addconstraint(AreaEnclosed(), selection = porebnd)
+
+
 }
 
 
@@ -432,7 +437,7 @@ fn Optimization(str, mesh, nn, control, ropt, sel=nil) {
 
 
 var str = "SinglePoreg${gstar}p${pstar}q${qstar}"
-var vtkMI = VTKImporter(String(initialmeshpath,"/InitialMeshStar.vtk"))
+var vtkMI = VTKImporter(String(initialmeshpath,"/InitialMeshRp=${0.75}.vtk"))
 var mesh = vtkMI.mesh()
 
 

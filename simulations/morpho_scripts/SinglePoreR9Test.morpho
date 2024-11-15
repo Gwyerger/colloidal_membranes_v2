@@ -14,7 +14,7 @@ import functionals
 // var Kbend = 1
 // var Ktwist = 1
 var K = 1
-var C = 2
+var C = 4
 var lamt = sqrt(K/C)
 var qstar = 0
 var gstar = 0.2

@@ -9,7 +9,7 @@ import functionals
 
 // Region Dimensions
 var K = 1
-var C = 2
+var C = 4
 var lamt = sqrt(K/C)
 var dx = 0.15/lamt
 var Hreg = 4/lamt
@@ -19,7 +19,7 @@ var Rp = 0.75/lamt
 
 // Import/Export Destination
 
-var pathexport = "/home/gabriel/Desktop/ProjectFiles/ColloidalMembranes/VTKMega/Round8"
+var pathexport = "/home/gabriel/Repositories/colloidal_membranes_v2/vtk_results/round9C=4"
 
 
 // --------------------------------------------------
@@ -100,8 +100,8 @@ fn CreateSelections(mesh, Lregion, Hregion, Rpore, Grain) {
     var LowerWallReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + Grain)
     var UpperWallReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - Grain)
     
-    var LowerWallCentReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + 2*Grain and abs(x) < 2*Rpore)
-    var UpperWallCentReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - 2*Grain and abs(x) < 2*Rpore)
+    var LowerWallCentReg = Selection(mesh, fn(x,y,z) y <= -Hregion/2 + 2*Grain and abs(x) < Lregion/8)
+    var UpperWallCentReg = Selection(mesh, fn(x,y,z) y >= Hregion/2 - 2*Grain and abs(x) < Lregion/8)
     var bnds = Selection(mesh, boundary=true)
     bnds.addgrade(0)
     LeftWallReg.addgrade(0)
@@ -142,12 +142,12 @@ fn CreateSelections(mesh, Lregion, Hregion, Rpore, Grain) {
 
 
 var mesh1 = CreateAndSaveMesh(Lreg, Hreg, Rp, dx, String("InitialMeshStarTest"))
-//
-//var Sels = CreateSelections(mesh1, Lreg, Hreg, Rp, dx)
-//var UpperWall = Sels[2], LowerWall = Sels[3], porebndtop = Sels[6], porebndbottom = Sels[7], lowerwallcent = Sels[8], upperwallcent = Sels[9]
-//
-//var mesh2 = AddConnectionsToMesh(mesh1, porebndtop, upperwallcent)
-//var mesh3 = AddConnectionsToMesh(mesh2, porebndbottom, lowerwallcent)
-//var vtkME = VTKExporter(mesh3)
-//vtkME.export(String(pathexport,"/","InitialMeshStar",".vtk"))
+
+var Sels = CreateSelections(mesh1, Lreg, Hreg, Rp, dx)
+var UpperWall = Sels[2], LowerWall = Sels[3], porebndtop = Sels[6], porebndbottom = Sels[7], lowerwallcent = Sels[8], upperwallcent = Sels[9]
+
+var mesh2 = AddConnectionsToMesh(mesh1, porebndtop, upperwallcent)
+var mesh3 = AddConnectionsToMesh(mesh2, porebndbottom, lowerwallcent)
+var vtkME = VTKExporter(mesh3)
+vtkME.export(String(pathexport,"/","InitialMeshStar",".vtk"))
 
